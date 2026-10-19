@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Flappy Bird風ゲーム デモ</title>
+    <title>Flappy Bird風ゲーム（カモンちゃん対応）</title>
     <style>
         body {
             margin: 0;
@@ -32,7 +32,7 @@
     </div>
 
 <script>
-// デバッグモードの設定 (trueにするとデバッグ情報を画面左上に表示)
+// デバッグモードの設定
 const DEBUG_MODE = false;
 
 // キー入力の管理オブジェクト
@@ -44,7 +44,6 @@ function onKeyDown(event) {
         keyPressed.add(event.code);
         keyPushed.add(event.code);
     }
-    // スペースキーでの画面スクロールを防止
     if (event.code === "Space") {
         event.preventDefault();
     }
@@ -64,29 +63,32 @@ const context = canvas.getContext("2d");
 const w = canvas.width;
 const h = canvas.height;
 
-// 画像データの準備（画像のパスがある場合は読み込み、無ければ自前でフォールバック描画）
+// --- キャラクター画像の読み込み ---
+// 画像ファイル名が同じフォルダにあることを前提に読み込みます
 const charImg = document.createElement("img");
-charImg.src = "nise-kamonchan.png"; // 画像ファイルがない場合は円描画になります
+charImg.src = "nise-kamonchan.png";      // 通常時の画像（ファイルがある場合）
+
+const charJumpImg = document.createElement("img");
+charJumpImg.src = "nise-kamonchan-jump.png"; // ジャンプ（上昇）時の画像
 
 // ゲームの各種変数
-let x = 100;         // プレイヤーのX座標（固定）
-let y = h / 2;       // プレイヤーのY座標
-let vy = 0;          // 垂直方向の速度
-const g = 0.45;      // 重力加速度
-const jumpSpeed = 8; // ジャンプの上昇力
-const radius = 20;   // プレイヤーの判定半径
+let x = 100;         
+let y = h / 2;       
+let vy = 0;          
+const g = 0.45;      
+const jumpSpeed = 8; 
+const radius = 25;   // キャラクターの大きさに合わせて調整（半径25 = 直径50px）
 
-let obstacles = [];  // 障害物のリスト {x, y, passed}
-let spawnTimer = 0;  // 障害物出現のタイマー
-const spawnInterval = 90; // 約1.5秒ごとに障害物を生成 (60fps想定)
-const pipeWidth = 70;     // 障害物の幅
-const gapHeight = 130;    // 隙間の広さ
-const pipeSpeed = 3.5;    // 障害物が左へ流れる速度
+let obstacles = [];  
+let spawnTimer = 0;  
+const spawnInterval = 90; 
+const pipeWidth = 70;     
+const gapHeight = 130;    
+const pipeSpeed = 3.5;    
 
 let score = 0;
 let gameOver = false;
 
-// ゲームのリセット処理
 function resetGame() {
     x = 100;
     y = h / 2;
@@ -97,43 +99,35 @@ function resetGame() {
     gameOver = false;
 }
 
-// メイン更新ルーチン（約1/60秒ごとに実行）
 function update() {
-    // ------------------------------------
     // 1. 状態の更新
-    // ------------------------------------
     if (!gameOver) {
-        // ジャンプ処理 (スペースキーが押し下げられた瞬間)
         if (keyPushed.has("Space")) {
             vy = -jumpSpeed;
         }
 
-        // 重力による速度と位置の更新
         vy += g;
         y += vy;
 
-        // 障害物の移動 & 画面外の障害物の削除 (安全なフィルタリング処理)
+        // 障害物の移動 & 削除
         const nextObstacles = [];
         for (const obs of obstacles) {
             obs.x -= pipeSpeed;
 
-            // スコア加算判定（プレイヤーの位置を通過したら1回だけ加算）
             if (!obs.passed && obs.x + pipeWidth / 2 < x) {
                 score++;
                 obs.passed = true;
             }
 
-            // 画面左端から完全に出る前であれば残す
             if (obs.x + pipeWidth / 2 > 0) {
                 nextObstacles.push(obs);
             }
         }
         obstacles = nextObstacles;
 
-        // 障害物の新規生成
+        // 障害物の生成
         spawnTimer--;
         if (spawnTimer <= 0) {
-            // 隙間の中心Y座標（上下の端に行きすぎないようランダム生成）
             const margin = 80;
             const gapY = margin + Math.random() * (h - margin * 2);
 
@@ -145,44 +139,36 @@ function update() {
             spawnTimer = spawnInterval;
         }
 
-        // --- 当たり判定（衝突チェック） ---
-        // A. 天井・床との衝突
+        // 当たり判定
         if (y - radius < 0 || y + radius > h) {
             gameOver = true;
         }
 
-        // B. 障害物（上下のパイプ）との衝突
         for (const obs of obstacles) {
             const pipeLeft = obs.x - pipeWidth / 2;
             const pipeRight = obs.x + pipeWidth / 2;
             const topPipeBottom = obs.y - gapHeight / 2;
             const bottomPipeTop = obs.y + gapHeight / 2;
 
-            // プレイヤーのX範囲がパイプと重なっているかチェック
             if (x + radius > pipeLeft && x - radius < pipeRight) {
-                // 上のパイプか下のパイプにY座標が接触しているか
                 if (y - radius < topPipeBottom || y + radius > bottomPipeTop) {
                     gameOver = true;
                 }
             }
         }
     } else {
-        // ゲームオーバー時にスペースキーを押したら再スタート
         if (keyPushed.has("Space")) {
             resetGame();
         }
     }
 
-    // ------------------------------------
     // 2. 画面の描画
-    // ------------------------------------
-    // キャンバス全域をクリア
     context.clearRect(0, 0, w, h);
 
     // 障害物（土管）の描画
     context.save();
-    context.fillStyle = "#73bf2e";   // パイプの色（緑）
-    context.strokeStyle = "#53801b"; // 枠線の色
+    context.fillStyle = "#73bf2e";   
+    context.strokeStyle = "#53801b"; 
     context.lineWidth = 3;
 
     for (const obs of obstacles) {
@@ -191,56 +177,42 @@ function update() {
         const bottomPipeY = obs.y + gapHeight / 2;
         const bottomPipeHeight = h - bottomPipeY;
 
-        // 上のパイプ
         context.fillRect(pipeLeft, 0, pipeWidth, topPipeHeight);
         context.strokeRect(pipeLeft, 0, pipeWidth, topPipeHeight);
 
-        // 下のパイプ
         context.fillRect(pipeLeft, bottomPipeY, pipeWidth, bottomPipeHeight);
         context.strokeRect(pipeLeft, bottomPipeY, pipeWidth, bottomPipeHeight);
     }
     context.restore();
 
-    // プレイヤー（鳥/キャラクター）の描画
+    // ----------------------------------------------------
+    // 3. キャラクターの描画（左右反転 ＆ 傾き ＆ 画像切り替え）
+    // ----------------------------------------------------
     context.save();
-    context.translate(x, y); // キャラクタ位置を中心に設定
+    context.translate(x, y); // キャラクタの中心座標へ移動
 
-    // 速度vyに応じて角度をつける（上昇時は上向き、下降時は下向き）
-    let angle = Math.min(Math.max(vy * 4, -30), 70) * Math.PI / 180;
+    // 左右反転（資料デモ10・11・12の解説通りの記述）[cite: 20, 22]
+    context.scale(-1, 1);
+
+    // 速度vyに合わせた傾き（ラジアン変換）
+    let angle = Math.min(Math.max(vy * 3, -25), 50) * Math.PI / 180;
     context.rotate(angle);
 
-    // 画像がロードされている場合は画像を表示、なければ円を描画
-    if (charImg.complete && charImg.naturalWidth !== 0) {
-        // 右向きにするため左右反転
-        context.scale(-1, 1);
-        context.drawImage(charImg, -radius, -radius, radius * 2, radius * 2);
+    // 上昇中（vy < 0）のときはジャンプ用の画像、それ以外は通常画像を使用
+    let currentImg = (vy < 0 && charJumpImg.complete && charJumpImg.naturalWidth !== 0) 
+                     ? charJumpImg 
+                     : charImg;
+
+    if (currentImg.complete && currentImg.naturalWidth !== 0) {
+        // 画像を描画（中心が (0,0) になるように -radius を指定）[cite: 22]
+        context.drawImage(currentImg, -radius, -radius, radius * 2, radius * 2);
     } else {
-        // 代替の丸キャラクター描画
+        // 画像がまだ読み込まれていない、またはエラー時の代替描画（円）
         context.beginPath();
         context.arc(0, 0, radius, 0, 2 * Math.PI);
         context.fillStyle = "#ffcc00";
         context.fill();
-        context.lineWidth = 2;
-        context.strokeStyle = "#333";
         context.stroke();
-
-        // 目とくちばしを追加して鳥っぽく表現
-        context.beginPath();
-        context.arc(8, -6, 4, 0, 2 * Math.PI);
-        context.fillStyle = "white";
-        context.fill();
-        context.beginPath();
-        context.arc(10, -6, 2, 0, 2 * Math.PI);
-        context.fillStyle = "black";
-        context.fill();
-
-        context.beginPath();
-        context.moveTo(12, 2);
-        context.lineTo(22, 6);
-        context.lineTo(12, 10);
-        context.closePath();
-        context.fillStyle = "#ff6600";
-        context.fill();
     }
     context.restore();
 
@@ -255,13 +227,14 @@ function update() {
     context.strokeText(`スコア: ${score}`, w / 2, 50);
     context.fillText(`スコア: ${score}`, w / 2, 50);
 
-    // ゲームオーバー画面表示
+    // ゲームオーバー画面
     if (gameOver) {
         context.fillStyle = "rgba(0, 0, 0, 0.5)";
         context.fillRect(0, 0, w, h);
 
         context.font = "bold 40px sans-serif";
         context.fillStyle = "#ff4444";
+        context.textAlign = "center";
         context.strokeText("GAME OVER", w / 2, h / 2 - 20);
         context.fillText("GAME OVER", w / 2, h / 2 - 20);
 
@@ -271,22 +244,11 @@ function update() {
         context.fillText("PRESS SPACE TO RESTART", w / 2, h / 2 + 30);
     }
 
-    // デバッグ表示
-    if (DEBUG_MODE) {
-        context.fillStyle = "blue";
-        context.textAlign = "left";
-        context.font = "14px monospace";
-        context.fillText(`Pos: (${x.toFixed(1)}, ${y.toFixed(1)}), vy: ${vy.toFixed(2)}`, 10, 20);
-        context.fillText(`KeyPressed: [${Array.from(keyPressed).join(", ")}]`, 10, 40);
-        context.fillText(`KeyPushed: [${Array.from(keyPushed).join(", ")}]`, 10, 60);
-    }
     context.restore();
-
-    // 次のフレーム準備のため 1回押しキー集合をクリア
     keyPushed.clear();
 }
 
-// 約1/60秒周期で更新関数を実行
+// 約1/60秒ごとに実行
 setInterval(update, 17);
 </script>
 
